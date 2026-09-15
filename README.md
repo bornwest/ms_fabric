@@ -17,18 +17,22 @@ commands are rejected.
 ## Install
 
 ```ruby
-gem "ms_fabric", git: "https://github.com/bornwest/ms_fabric"
+gem "ms_fabric", git: "git@github.com:bornwest/ms_fabric.git"
 ```
 
-`MsFabric::Lakehouse::Database` (the SQL endpoint) additionally needs the **ruby-odbc** gem and
-the **Microsoft ODBC Driver 18** (`msodbcsql18`) on the host — it's an optional dependency, loaded
-only when you call `Database#query`:
+`ruby-odbc` is bundled as a dependency (no separate install), but its native extension needs
+**unixODBC** to compile and the **Microsoft ODBC Driver 18** (`msodbcsql18`) on the host to connect
+— both required only for `MsFabric::Lakehouse::Database` (the SQL endpoint). On Debian/Ubuntu:
 
-```ruby
-gem "ruby-odbc", require: "odbc"
+```dockerfile
+RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg \
+ && curl -fsSL https://packages.microsoft.com/config/debian/12/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+ && apt-get update && ACCEPT_EULA=Y apt-get install -y msodbcsql18 unixodbc-dev \
+ && rm -rf /var/lib/apt/lists/*
 ```
 
-Eventhouse and OneLake files use only the Ruby standard library.
+Eventhouse and OneLake files use only the Ruby standard library — the ODBC extension is loaded
+lazily, so those paths work even where the driver isn't installed.
 
 ## Authentication
 

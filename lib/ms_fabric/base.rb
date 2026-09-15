@@ -8,15 +8,15 @@ class MsFabric
     @auth = Auth.new(client_id:, client_secret:, tenant_id:, identity_endpoint:, identity_header:)
   end
 
-  # ruby-odbc is an optional dependency — only Lakehouse::Database needs it.
+  # ruby-odbc ships as a dependency, but its native extension is required lazily so the rest of the
+  # gem still loads where unixODBC/msodbcsql18 aren't installed (Eventhouse and files need neither).
   def self.load_odbc!
     @load_odbc ||= begin
       require "odbc"
       true
     rescue LoadError
-      raise Error, "MsFabric::Lakehouse::Database needs the 'ruby-odbc' gem and the Microsoft " \
-                   "ODBC Driver 18 (msodbcsql18). Add `gem \"ruby-odbc\", require: \"odbc\"` and " \
-                   "install the driver."
+      raise Error, "MsFabric::Lakehouse::Database needs unixODBC and the Microsoft ODBC Driver 18 " \
+                   "(msodbcsql18) installed on the host."
     end
   end
 

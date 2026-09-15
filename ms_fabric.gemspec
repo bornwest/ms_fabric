@@ -20,9 +20,9 @@ Gem::Specification.new do |spec|
   spec.files = Dir["lib/**/*.rb", "README.md", "LICENSE"]
   spec.require_paths = ["lib"]
 
-  # ruby-odbc is an OPTIONAL runtime dependency — only MsFabric::Lakehouse::Database (the SQL
-  # endpoint) needs it, and it also requires the Microsoft ODBC Driver 18 (msodbcsql18) on the
-  # host. Eventhouse and OneLake files use only the standard library. See the README.
+  # Powers MsFabric::Lakehouse::Database (the SQL endpoint). Compiles against unixODBC at install
+  # time and needs the Microsoft ODBC Driver 18 (msodbcsql18) on the host at connect time.
+  spec.add_dependency "ruby-odbc"
 
   spec.add_development_dependency "rspec", "~> 3.13"
 end

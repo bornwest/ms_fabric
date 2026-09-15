@@ -9,33 +9,61 @@ class MsFabric
         @database = database
       end
 
-      # SELECT -> Array<Hash> (string keys); with a block, streams each row and returns the count.
-      def query(sql, &block)
+      # SELECT -> Array<Hash> (string keys). `limit` caps rows read (client-side). With a block,
+      # streams each row and returns the count.
+      def query(sql, limit: nil, &block)
         guard_read_only!(sql)
         MsFabric.load_odbc!
-        stmt = connection.run(sql)
-        return stream(stmt, &block) if block
+        fetch_rows(sql, limit, &block)
+      end
 
-        [].tap { |rows| stmt.each_hash { |row| rows << row.dup } }
+      def close = reset_connection
+
+      private
+
+      # ODBC constants are referenced only here, after load_odbc! has required the extension.
+      def fetch_rows(sql, limit, &block)
+        stmt = connection.run(sql)
+        block ? stream(stmt, limit, &block) : collect(stmt, limit)
+      rescue ODBC::Error => e
+        reset_connection
+        raise QueryError, "SQL query failed: #{e.message}"
       ensure
         stmt&.drop
       end
 
-      def close
-        @connection&.disconnect
-        @connection = nil
+      def collect(stmt, limit)
+        rows = []
+        stmt.each_hash do |row|
+          rows << row.dup
+          break if limit && rows.size >= limit
+        end
+        rows
       end
 
-      private
-
-      def stream(stmt)
+      def stream(stmt, limit)
         count = 0
-        stmt.each_hash { |row| yield row.dup; count += 1 }
+        stmt.each_hash do |row|
+          yield row.dup
+          count += 1
+          break if limit && count >= limit
+        end
         count
       end
 
       def connection
         @connection ||= ODBC::Database.new.drvconnect(connection_string)
+      rescue ODBC::Error => e
+        @connection = nil
+        raise ConnectionError, "SQL connect failed: #{e.message}"
+      end
+
+      def reset_connection
+        @connection&.disconnect
+      rescue ODBC::Error
+        nil # already dead
+      ensure
+        @connection = nil
       end
 
       def connection_string

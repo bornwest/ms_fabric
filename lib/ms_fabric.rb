@@ -1,0 +1,12 @@
+require "net/http"
+require "json"
+require "uri"
+require "erb"
+
+require_relative "ms_fabric/version"
+require_relative "ms_fabric/errors"
+require_relative "ms_fabric/auth"
+require_relative "ms_fabric/base"
+require_relative "ms_fabric/lakehouse/database"
+require_relative "ms_fabric/lakehouse/files"
+require_relative "ms_fabric/eventhouse/database"

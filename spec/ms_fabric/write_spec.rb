@@ -6,10 +6,14 @@ RSpec.describe MsFabric::Lakehouse::Files do
   end
 
   let(:sent) { [] }
+  let(:connection) { Object.new }
 
   before do
     allow_any_instance_of(MsFabric::Auth).to receive(:token).and_return("token")
-    allow(MsFabric::Http).to receive(:request) do |_uri, req, **|
+    allow(MsFabric::Http).to receive(:session).and_yield(connection)
+    allow(MsFabric::Http).to receive(:request) do |_uri, req, http:, **|
+      raise "expected the shared connection" unless http.equal?(connection)
+
       sent << req
       FakeResponse.new("201", "", {})
     end

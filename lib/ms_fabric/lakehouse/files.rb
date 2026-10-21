@@ -48,28 +48,33 @@ class MsFabric
       # Write `io` (an IO, or a String of bytes) to `path` relative to Files/, replacing any file
       # there; parent folders are created. The bytes are appended in CHUNK pieces and committed by
       # the final flush, so a reader never sees a partial file. Returns the number of bytes written.
+      #
+      # The requests share one connection: OneLake answers the first request on a connection
+      # seconds slower than the rest.
       def write_file(path, io)
         io = StringIO.new(io) if io.is_a?(String)
         uri = file_uri(path)
-        write_request(:Put, uri, "resource=file")
-        position = 0
-        while (chunk = io.read(CHUNK))
-          write_request(:Patch, uri, "action=append&position=#{position}", chunk)
-          position += chunk.bytesize
+        Http.session(uri, read_timeout: FILE_READ_TIMEOUT) do |http|
+          write_request(http, :Put, uri, "resource=file")
+          position = 0
+          while (chunk = io.read(CHUNK))
+            write_request(http, :Patch, uri, "action=append&position=#{position}", chunk)
+            position += chunk.bytesize
+          end
+          write_request(http, :Patch, uri, "action=flush&position=#{position}")
+          position
         end
-        write_request(:Patch, uri, "action=flush&position=#{position}")
-        position
       end
 
       private
 
-      def write_request(method, uri, query, body = "")
+      def write_request(http, method, uri, query, body = "")
         uri = uri.dup.tap { |u| u.query = query }
         req = Net::HTTP.const_get(method).new(uri)
         req["Authorization"] = "Bearer #{token(RESOURCE)}"
         req["x-ms-version"] = API_VERSION
         req.body = body
-        ok!(Http.request(uri, req, read_timeout: FILE_READ_TIMEOUT))
+        ok!(Http.request(uri, req, read_timeout: FILE_READ_TIMEOUT, http:))
       end
 
       def list_request(directory, recursive, continuation)

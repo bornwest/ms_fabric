@@ -12,13 +12,14 @@ class MsFabric
 
     module_function
 
-    # Returns the response; retries transient statuses/network faults with backoff.
-    def request(uri, req, read_timeout: DEFAULT_READ_TIMEOUT)
+    # Returns the response; retries transient statuses/network faults with backoff. Pass `http`
+    # (from `session`) to send on an open connection; Net::HTTP reopens it if a fault closed it.
+    def request(uri, req, read_timeout: DEFAULT_READ_TIMEOUT, http: nil)
       attempt = 0
       loop do
         attempt += 1
         begin
-          res = perform(uri, req, read_timeout)
+          res = perform(uri, req, read_timeout, http)
         rescue ConnectionError
           raise if attempt > MAX_RETRIES
           sleep(backoff(attempt)); next
@@ -42,8 +43,17 @@ class MsFabric
       raise ProtocolError, "expected JSON but got (HTTP #{res.code}): #{res.body.to_s[0, 200]}"
     end
 
-    def perform(uri, req, read_timeout)
-      start(uri, read_timeout) { |http| http.request(req) }
+    # Yields one open connection for several requests to the same host.
+    def session(uri, read_timeout: DEFAULT_READ_TIMEOUT, &)
+      start(uri, read_timeout, &)
+    rescue *NETWORK_ERRORS => e
+      raise wrap(uri, e)
+    end
+
+    def perform(uri, req, read_timeout, http = nil)
+      return http.request(req) if http
+
+      start(uri, read_timeout) { |conn| conn.request(req) }
     rescue *NETWORK_ERRORS => e
       raise wrap(uri, e)
     end

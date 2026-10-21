@@ -1,10 +1,12 @@
 class MsFabric
   module Lakehouse
-    # Reads OneLake files (ADLS Gen2 over HTTPS) for a lakehouse's Files/ area.
+    # Reads and writes OneLake files (ADLS Gen2 over HTTPS) in a lakehouse's Files/ area.
     class Files < MsFabric
       RESOURCE = "https://storage.azure.com".freeze
       HOST = "onelake.dfs.fabric.microsoft.com".freeze
       FILE_READ_TIMEOUT = 300
+      API_VERSION = "2023-11-03".freeze
+      CHUNK = 4 * 1024 * 1024
 
       def initialize(workspace:, lakehouse:, **auth)
         super(**auth)
@@ -43,7 +45,32 @@ class MsFabric
         res.body
       end
 
+      # Write `io` (an IO, or a String of bytes) to `path` relative to Files/, replacing any file
+      # there; parent folders are created. The bytes are appended in CHUNK pieces and committed by
+      # the final flush, so a reader never sees a partial file. Returns the number of bytes written.
+      def write_file(path, io)
+        io = StringIO.new(io) if io.is_a?(String)
+        uri = file_uri(path)
+        write_request(:Put, uri, "resource=file")
+        position = 0
+        while (chunk = io.read(CHUNK))
+          write_request(:Patch, uri, "action=append&position=#{position}", chunk)
+          position += chunk.bytesize
+        end
+        write_request(:Patch, uri, "action=flush&position=#{position}")
+        position
+      end
+
       private
+
+      def write_request(method, uri, query, body = "")
+        uri = uri.dup.tap { |u| u.query = query }
+        req = Net::HTTP.const_get(method).new(uri)
+        req["Authorization"] = "Bearer #{token(RESOURCE)}"
+        req["x-ms-version"] = API_VERSION
+        req.body = body
+        ok!(Http.request(uri, req, read_timeout: FILE_READ_TIMEOUT))
+      end
 
       def list_request(directory, recursive, continuation)
         uri = URI("https://#{HOST}/#{enc(@workspace)}")

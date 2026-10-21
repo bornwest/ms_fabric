@@ -1,18 +1,19 @@
 # ms_fabric
 
-A small, read-only Ruby client for **Microsoft Fabric**. Connect to Fabric services and get
-results back as plain Ruby — no framework, no ActiveRecord.
+A small Ruby client for **Microsoft Fabric**. Connect to Fabric services and get results back as
+plain Ruby — no framework, no ActiveRecord.
 
 Supported today:
 
 | Class | Talks to | Transport |
 |---|---|---|
 | `MsFabric::Lakehouse::Database` | Lakehouse **tables** (SQL analytics endpoint) | T-SQL over ODBC |
-| `MsFabric::Lakehouse::Files` | Lakehouse **files** (OneLake) | ADLS Gen2 over HTTPS |
+| `MsFabric::Lakehouse::Files` | Lakehouse **files** (OneLake): read and write | ADLS Gen2 over HTTPS |
 | `MsFabric::Eventhouse::Database` | Eventhouse **KQL database** | Kusto REST |
+| `MsFabric::Workspace` | **Notebook runs** and SQL endpoint refresh | Fabric REST API |
 
-All clients inherit auth from the base `MsFabric` class. **Read-only** — writes and control
-commands are rejected.
+All clients inherit auth from the base `MsFabric` class. Table and KQL queries are **read-only** —
+writes and control commands are rejected; data changes go through files and notebooks.
 
 ## Install
 
@@ -87,7 +88,29 @@ files.list_files("path/to/dir")                     # paginated; => [{ "name"=>.
 files.list_files("path/to/dir", limit: 100)         # cap entries
 bytes = files.read_file("path/to/dir/file.pdf")
 files.read_file("path/to/big.zip") { |chunk| io.write(chunk) }   # streamed, returns nil
+
+files.write_file("path/to/report.pdf", File.open("report.pdf", "rb"))   # => bytes written
+files.write_file("path/to/notes.json", JSON.generate(notes))            # a String works too
 ```
+
+`write_file` replaces any file at the path and creates its folders. It appends in 4 MB chunks and
+commits with a final flush, so readers never see a partial file.
+
+### Notebooks and the SQL endpoint
+
+```ruby
+workspace = MsFabric::Workspace.new(name: ENV.fetch("FABRIC_WORKSPACE"), **sp)
+
+job = workspace.run_notebook("nb_example", parameters: { MAX_FILES: 20 }, lakehouse: "my_lakehouse")
+workspace.wait(job)              # => { "status" => "Completed", ... }, polling every 30 s
+workspace.job_status(job)        # one poll, no waiting
+
+workspace.refresh_sql_endpoint("my_lakehouse")   # make new tables and rows queryable now
+```
+
+`run_notebook` sets parameters-cell variables (Integer → int, true/false → bool, else string),
+binds a default lakehouse, and enables inline `%pip`. It isn't retried — a repeat would be a second
+run. The identity needs **Contributor** on the workspace to run notebooks and write files.
 
 ## Return shapes & limits
 
@@ -110,7 +133,8 @@ All raised errors subclass `MsFabric::Error`:
 | `MsFabric::QueryError` | server returned an error, or a read-only violation |
 | `MsFabric::ProtocolError` | unexpected or unparseable response |
 
-Requests carry sane timeouts and retry transient failures (`429/5xx`, network blips) with backoff.
+Requests carry sane timeouts and retry transient failures (`429/5xx`, network blips) with backoff,
+except starting a notebook run.
 
 ## Development
 

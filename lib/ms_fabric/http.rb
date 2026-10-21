@@ -1,6 +1,7 @@
 class MsFabric
   # Shared HTTP: timeouts, network-fault wrapping, transient-status retry, and JSON parsing.
-  # GETs and the query POSTs are idempotent (read-only), so retrying them is safe.
+  # Retrying is safe for what it carries: reads, read-only query POSTs, and ADLS writes, which are
+  # addressed by position, so a repeat lands the same bytes at the same offset.
   module Http
     OPEN_TIMEOUT = 15
     DEFAULT_READ_TIMEOUT = 100

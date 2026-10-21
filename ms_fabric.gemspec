@@ -6,10 +6,12 @@ Gem::Specification.new do |spec|
   spec.authors     = ["Rishabh Gupta"]
   spec.email       = ["rishabh@bornwest.com"]
 
-  spec.summary     = "Read-only Ruby client for Microsoft Fabric."
-  spec.description  = "Connect to Microsoft Fabric services — Lakehouse tables (SQL endpoint) " \
-                      "and files (OneLake), and Eventhouse (KQL) — with service-principal or " \
-                      "managed-identity auth."
+  spec.summary     = "Ruby client for Microsoft Fabric."
+  spec.description = <<~TEXT.split.join(" ")
+    Connect to Microsoft Fabric services — read-only Lakehouse tables (SQL endpoint) and Eventhouse
+    (KQL), OneLake files read and write, and notebook runs — with service-principal or
+    managed-identity auth.
+  TEXT
   spec.homepage    = "https://github.com/bornwest/ms_fabric"
   spec.license     = "MIT"
   spec.required_ruby_version = ">= 3.1"
